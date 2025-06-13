@@ -13,7 +13,7 @@ typedef struct {
     PortStatus status;          // État du port (connecté/déconnecté)
     int connected_to_equip;     // Index de l'équipement connecté
     int connected_to_port;      // Numéro du port connecté sur l'autre équipement
-    AdresseMAC last_src_mac;    // Dernière adresse MAC source vue sur ce port
+    mac_addr_t last_src_mac;    // Dernière adresse MAC source vue sur ce port
 } Port;
 
 // Structure pour gérer les ports d'un équipement
@@ -26,7 +26,7 @@ typedef struct {
 void initialiser_port(Port *port, int id);
 void connecter_ports(Port *port1, int equip1, Port *port2, int equip2);
 void deconnecter_port(Port *port);
-int trouver_port_par_mac(const PortManager *pm, const AdresseMAC *mac);
-void mettre_a_jour_table_commutation(Switch *sw, const AdresseMAC *mac, int port_id);
+int trouver_port_par_mac(const PortManager *pm, const mac_addr_t *mac);
+void mettre_a_jour_table_commutation(switch_t *sw, const mac_addr_t *mac, int port_id);
 
 #endif 
