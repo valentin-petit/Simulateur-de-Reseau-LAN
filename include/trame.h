@@ -2,41 +2,33 @@
 #define TRAME_H
 
 #include <stdint.h>
-#include <stdio.h>
-#include "reseau.h"
-#include "port.h"
+#include "equipement.h"
 
-// Trame Ethernet simplifiée
+#define ETHERNET_MAX_DATA 1500
+
 typedef struct {
-    uint8_t preambule[7];
-    uint8_t SFD;
-    AdresseMAC src_mac;
-    AdresseMAC dest_mac;
+    uint8_t preambule[7];      // 7 octets = préambule
+    uint8_t sfd;               // 1 octet = start frame delimiter
+    mac_addr_t dest;           // 6 octets
+    mac_addr_t src;            // 6 octets
+    uint16_t type;             // 2 octets (ex: 0x0800 pour IPv4)
+    uint8_t data[ETHERNET_MAX_DATA]; // données utiles (0 à 1500 octets)
+    uint16_t data_len;         // longueur réelle des données
+    uint8_t bourrage[46];      // padding si data < 46 octets
+    uint32_t fcs;              // 4 octets (simplifié ici)
+} ethernet_frame_t;
 
-    uint16_t ethertype;
-    union {
-        uint8_t raw[1500];
-        struct {
-            uint8_t data[46];
-            uint8_t padding[1454];
-        } contenu;
-    } DATA;
-    uint32_t FCS;
-} trame;
+void creer_trame_ethernet(
+    ethernet_frame_t *trame,
+    mac_addr_t src,
+    mac_addr_t dest,
+    uint16_t type,
+    const uint8_t *data,
+    uint16_t data_len
+);
 
-// Constantes pour les adresses MAC spéciales
-extern const AdresseMAC ADRESSE_BROADCAST;
-
-// Fonctions d'affichage
-void afficher_trame(const trame *t);
-void afficher_trame_complete(const trame *t);
-AdresseMAC recevoir(const trame *t, Equipement *e);
-
-// Fonctions de traitement des trames
-void initialiser_trame(trame *t, const AdresseMAC *src, const AdresseMAC *dest);
-int est_broadcast(const AdresseMAC *mac);
-void traiter_trame_station(const trame *t, Equipement *station, PortManager *pm);
-void traiter_trame_switch(const trame *t, Equipement *sw, PortManager *pm, int port_reception);
-void envoyer_trame(const trame *t, Equipement *src, PortManager *pm, ReseauLocal *reseau);
+void afficher_trame_utilisateur(const ethernet_frame_t *trame);
+void afficher_trame_hex(const ethernet_frame_t *trame);
+void afficher_mac(mac_addr_t mac);
 
 #endif

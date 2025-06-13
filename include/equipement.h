@@ -1,52 +1,62 @@
 #ifndef EQUIPEMENT_H
 #define EQUIPEMENT_H
 
-#include <stdio.h>
 #include <stdint.h>
-#include "reseau.h"
 
-#define MAX_PORTS 32
-#define MAX_EQUIPES 100
+#define MAC_ADDR_LEN 6
+#define IP_ADDR_LEN 4
+#define MAX_PORTS 64
+#define MAX_STATIONS 32
+#define MAX_SWITCHES 16
 
-// Station
 typedef struct {
-    AdresseMAC mac;
-    AdresseIP ip;
-} Station;
+    uint8_t addr[MAC_ADDR_LEN];
+} mac_addr_t;
 
-// Switch
 typedef struct {
-    AdresseMAC mac;
+    uint8_t addr[IP_ADDR_LEN];
+} ip_addr_t;
+
+typedef struct {
+    mac_addr_t mac;
+    ip_addr_t ip;
+} station_t;
+
+typedef struct {
+    mac_addr_t mac;
     int nb_ports;
-    int priorite;
-    AdresseMAC table_commutation[MAX_PORTS];
-} Switch;
+    int priority;
+    mac_addr_t mac_table[MAX_PORTS];
+    int port_table[MAX_PORTS]; // index du voisin
+    int port_etat[MAX_PORTS];  // 1 = actif (spanning tree), 0 = bloqué
+    int mac_table_size;
+} switch_t;
 
-// Type d'équipement
-typedef enum {
-    STATION = 1, 
-    SWITCH = 2
-} TypeEquipement;
+typedef enum { STATION, SWITCH } equip_type_t;
 
 typedef struct {
-    TypeEquipement type;
+    equip_type_t type;
     union {
-        Station station;
-        Switch sw;
-    } typequipement;
-} Equipement;
+        station_t station;
+        switch_t sw;
+    } data;
+} equipement_t;
 
-typedef struct ReseauLocal {
-    Equipement equipements[MAX_EQUIPES];
+typedef struct {
+    int equip1;
+    int equip2;
+    int poids;
+} lien_t;
+
+typedef struct {
     int nb_equipements;
-    int matrice_adjacence[MAX_EQUIPES][MAX_EQUIPES]; // Pour faire la table de commutations
-} ReseauLocal;
+    equipement_t equipements[MAX_SWITCHES + MAX_STATIONS];
+    int nb_liens;
+    lien_t liens[128];
+} reseau_t;
 
-// Fonctions d'affichage
-void afficher_station(Station s);
-void afficher_switch(Switch sw);
-void afficher_equipement(Equipement e);
-void afficher_reseau(const ReseauLocal* reseau);
-void afficher_matrice_adjacence(const ReseauLocal* reseau);
+// Fonctions simples de comparaison
+int mac_egal(mac_addr_t m1, mac_addr_t m2);
+int ip_egal(ip_addr_t ip1, ip_addr_t ip2);
 
 #endif

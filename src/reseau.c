@@ -1,105 +1,132 @@
+#include "reseau.h"
 #include <stdio.h>
-#include <stdint.h>
-#include <string.h>
 #include <stdlib.h>
-#include "../include/reseau.h"
-#include "../include/equipement.h"
+#include <string.h>
 
-void afficher_mac(AdresseMAC mac) {
-    for (int i = 5; i >= 0; i--) {
-        unsigned int octet = (mac >> (8 * i)) & 0xFF;
-        printf("%02x", octet);
-        if (i > 0) printf(":");
-    }
-}
-
-void afficher_ip(AdresseIP ip) {
-    for (int i = 3; i >= 0; i--) {
-        printf("%d", (ip >> (8 * i)) & 0xFF);
-        if (i > 0) printf(".");
-    }
-}
-
-// convertit le string en uint64_t
-AdresseMAC convertir_en_mac(const char* mac_str) {
-    AdresseMAC mac = 0;
-    unsigned int octets[6];
-    sscanf(mac_str, "%02x:%02x:%02x:%02x:%02x:%02x",
-            &octets[0], &octets[1], &octets[2],
-            &octets[3], &octets[4], &octets[5]);
-
-    for (int i = 0; i < 6; i++) {
-        mac = (mac << 8) | octets[i];
-    }
+// Convertit une chaîne de caractères au format MAC (xx:yy:zz:...) en structure mac_addr_t
+mac_addr_t parse_mac(const char *str) {
+    mac_addr_t mac;
+    unsigned int bytes[MAC_ADDR_LEN];
+    sscanf(str, "%x:%x:%x:%x:%x:%x",
+           &bytes[0], &bytes[1], &bytes[2], &bytes[3], &bytes[4], &bytes[5]);
+    for (int i = 0; i < MAC_ADDR_LEN; i++) mac.addr[i] = (uint8_t)bytes[i];
     return mac;
 }
-// convertit le string en uint32_t
-AdresseIP convertir_en_ip(const char* ip_str) {
-    AdresseIP ip = 0;
-    unsigned int octets[4];
-    sscanf(ip_str, "%d.%d.%d.%d",
-            &octets[0], &octets[1], &octets[2], &octets[3]);
 
-    ip = (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3];
+// Convertit une chaîne de caractères au format IP (a.b.c.d) en structure ip_addr_t
+ip_addr_t parse_ip(const char *str) {
+    ip_addr_t ip;
+    unsigned int bytes[IP_ADDR_LEN];
+    sscanf(str, "%u.%u.%u.%u", &bytes[0], &bytes[1], &bytes[2], &bytes[3]);
+    for (int i = 0; i < IP_ADDR_LEN; i++) ip.addr[i] = (uint8_t)bytes[i];
     return ip;
 }
 
+// Charge la configuration du réseau depuis un fichier texte
+// Format attendu : nombre d'équipements et de liens sur la première ligne
+// Suivi des descriptions des équipements (type;mac;ip pour les stations, type;mac;nb_ports;priority pour les switches)
+// Et enfin les liens entre équipements (equip1;equip2;poids)
+int charger_reseau(const char *filename, reseau_t *reseau) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Erreur ouverture fichier");
+        return -1;
+    }
 
-// Fonction qui récupère le fichier appelé (réseau_config) et le lit
-// Faire les erreurs
-int charger_reseau_fichier(const char* nom_fichier, ReseauLocal* reseau) {
-    FILE* fichier = fopen(nom_fichier, "r"); // faire gestion d'erreur car sinn ca risque de planter
+    // Lecture du nombre d'équipements et de liens
+    int nb_equipements, nb_liens;
+    if (fscanf(file, "%d %d\n", &nb_equipements, &nb_liens) != 2) {
+        fclose(file);
+        return -2;
+    }
+    reseau->nb_equipements = nb_equipements;
+    reseau->nb_liens = nb_liens;
 
-    int nb_equipements_lus; // dans le ficher
-    int nb_liens_lus; // idem
-    fscanf(fichier, "%d %d\n", &nb_equipements_lus, &nb_liens_lus); // lecture du haut du fichier (15 11)
+    // Lecture des équipements
+    char line[256];
+    for (int i = 0; i < nb_equipements; i++) {
+        if (!fgets(line, sizeof(line), file)) {
+            fclose(file);
+            return -3;
+        }
+        int type = -1;
+        sscanf(line, "%d;", &type);
+        char *ptr = strchr(line, ';');
+        if (!ptr) continue;
+        ptr++; // après le premier ';'
 
-    reseau->nb_equipements = nb_equipements_lus; // met dans le réseau le nombre actuel
+        // Traitement différent selon le type d'équipement (station ou switch)
+        if (type == 1) { // station
+            char mac_str[32], ip_str[32];
+            sscanf(ptr, "%31[^;];%31[^\n]", mac_str, ip_str);
+            reseau->equipements[i].type = STATION;
+            reseau->equipements[i].data.station.mac = parse_mac(mac_str);
+            reseau->equipements[i].data.station.ip = parse_ip(ip_str);
+        } else if (type == 2) { // switch
+            char mac_str[32];
+            int nb_ports, priority;
+            sscanf(ptr, "%31[^;];%d;%d", mac_str, &nb_ports, &priority);
+            reseau->equipements[i].type = SWITCH;
+            reseau->equipements[i].data.sw.mac = parse_mac(mac_str);
+            reseau->equipements[i].data.sw.nb_ports = nb_ports;
+            reseau->equipements[i].data.sw.priority = priority;
+        } else {
+            fclose(file);
+            return -4;
+        }
+    }
 
-    char line_buffer[256]; // tableau de char qui lit une ligne entière du fichier
+    // Lecture des liens entre équipements
+    for (int i = 0; i < nb_liens; i++) {
+        if (!fgets(line, sizeof(line), file)) {
+            fclose(file);
+            return -5;
+        }
+        int e1, e2, poids;
+        if (sscanf(line, "%d;%d;%d", &e1, &e2, &poids) != 3) {
+            fclose(file);
+            return -6;
+        }
+        reseau->liens[i].equip1 = e1;
+        reseau->liens[i].equip2 = e2;
+        reseau->liens[i].poids = poids;
+    }
 
+    // Initialisation des tables de voisins pour chaque switch
     for (int i = 0; i < reseau->nb_equipements; i++) {
-        fgets(line_buffer, sizeof(line_buffer), fichier);
-        line_buffer[strcspn(line_buffer, "\n")] = '\0';
-
-        int type_equipement_lue;
-        char mac_str[20];
-        char ip_str[20];
-        int nb_ports_lue, priorite_lue;
-
-        sscanf(line_buffer, "%d;", &type_equipement_lue); // lit le premier nombre jusqu a : dans "XX:XX"
-        reseau->equipements[i].type = (TypeEquipement)type_equipement_lue; // associe la valeure au nom de l'equip
-
-        // lit en fonction de l'equipement
         if (reseau->equipements[i].type == SWITCH) {
-            sscanf(line_buffer + 2, "%17[^;];%d;%d", mac_str, &nb_ports_lue, &priorite_lue);
-            reseau->equipements[i].typequipement.sw.mac = convertir_en_mac(mac_str);
-            reseau->equipements[i].typequipement.sw.nb_ports = nb_ports_lue;
-            reseau->equipements[i].typequipement.sw.priorite = priorite_lue;
-            for(int j=0; j<MAX_PORTS; j++) {
-                reseau->equipements[i].typequipement.sw.table_commutation[j] = 0;
-                // table de commutation pas encore faites
-            }
-
-        } else if (reseau->equipements[i].type == STATION) {
-            sscanf(line_buffer + 2, "%17[^;];%15s", mac_str, ip_str);
-            reseau->equipements[i].typequipement.station.mac = convertir_en_mac(mac_str);
-            reseau->equipements[i].typequipement.station.ip = convertir_en_ip(ip_str);
+            reseau->equipements[i].data.sw.nb_ports = 0;
         }
     }
-    for (int i = 0; i < reseau->nb_equipements; i++) {
-        for (int j = 0; j < reseau->nb_equipements; j++) {
-            reseau->matrice_adjacence[i][j] = -1;
+
+    // Configuration des ports des switches en fonction des liens
+    for (int i = 0; i < reseau->nb_liens; i++) {
+        int e1 = reseau->liens[i].equip1;
+        int e2 = reseau->liens[i].equip2;
+
+        // Configuration du port pour le premier équipement
+        if (reseau->equipements[e1].type == SWITCH) {
+            switch_t *sw1 = &reseau->equipements[e1].data.sw;
+            sw1->port_table[sw1->nb_ports] = e2;
+            // Les ports vers les stations sont toujours actifs, ceux vers les switches sont gérés par STP
+            if (reseau->equipements[e2].type == STATION)
+                sw1->port_etat[sw1->nb_ports] = 1;
+            else
+                sw1->port_etat[sw1->nb_ports] = 0;
+            sw1->nb_ports++;
+        }
+
+        // Configuration du port pour le second équipement
+        if (reseau->equipements[e2].type == SWITCH) {
+            switch_t *sw2 = &reseau->equipements[e2].data.sw;
+            sw2->port_table[sw2->nb_ports] = e1;
+            if (reseau->equipements[e1].type == STATION)
+                sw2->port_etat[sw2->nb_ports] = 1;
+            else
+                sw2->port_etat[sw2->nb_ports] = 0;
+            sw2->nb_ports++;
         }
     }
-    for (int k = 0; k < nb_liens_lus; k++) {
-        int eq1, eq2, poids;
-        fscanf(fichier, "%d;%d;%d\n", &eq1, &eq2, &poids);
-        reseau->matrice_adjacence[eq1][eq2] = poids;
-        reseau->matrice_adjacence[eq2][eq1] = poids;
-        // idem
-    }
-
-    fclose(fichier);
+    fclose(file);
     return 0;
 }
