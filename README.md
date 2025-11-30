@@ -44,7 +44,7 @@ Le simulateur propose un menu interactif en ligne de commande pour :
 ## Installation et Exécution
 Pour exécuter et contribuer au projet localement, vous devez disposer d'un environnement de compilation C. Ensuite, suivez ces étapes :
 
-1. Cloner votre fork localement : `git clone https://github.com/<votre_groupe>/DOOnjonDragon.git`
+1. Cloner votre fork localement : `https://github.com/valentin-petit/Simulateur-de-Reseau-LAN.git`
 2. Compiler le projet : make    
 3. Lancer le simulateur en spécifiant le fichier de configuration : ./bin/simulateur_reseau reseau_config.txt ou make run  
 
