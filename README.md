@@ -51,7 +51,7 @@ Pour exécuter et contribuer au projet localement, vous devez disposer d'un envi
 ## Équipe
 
 Ce projet a été réalisé avec :
-* **Yvan DUBLANC-SOUBIGOU** 
+* **Yvann DUBLANC--SOUBIGOU** 
 * **Yannis SALMANE**
 
 ## Licence
